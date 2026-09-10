@@ -1,0 +1,23 @@
+{
+  "name": "threads-api-test-explorer",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "vite build",
+    "dev": "vite",
+    "dev:sandbox": "wrangler pages dev dist --ip 0.0.0.0 --port 3000",
+    "preview": "wrangler pages dev dist --ip 0.0.0.0 --port 3000",
+    "deploy": "npm run build && wrangler pages deploy dist",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "hono": "4.13.7"
+  },
+  "devDependencies": {
+    "@hono/vite-cloudflare-pages": "0.4.3",
+    "typescript": "7.0.2",
+    "vite": "8.3.0",
+    "wrangler": "4.131.0"
+  }
+}

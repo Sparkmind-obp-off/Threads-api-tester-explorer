@@ -1,0 +1,17 @@
+node_modules/
+dist/
+.wrangler/
+.dev.vars
+.env
+.env.*
+!.env.example
+*.log
+.pm2/
+pids/
+*.pid
+*.pid.lock
+*.backup
+*.bak
+*.tar.gz
+*.zip
+.DS_Store

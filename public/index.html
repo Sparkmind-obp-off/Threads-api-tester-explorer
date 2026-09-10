@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="description" content="A focused developer console for testing and validating Meta Threads API integrations.">
+  <title>Threads API Test Explorer</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header class="app-header">
+    <div class="brand-block">
+      <span class="brand-mark" aria-hidden="true">@</span>
+      <div><h1>THREADS API TEST EXPLORER</h1><p>Test and validate your Meta Threads API integration.</p></div>
+    </div>
+    <div class="header-actions">
+      <span id="server-status" class="badge unknown">SERVER UNKNOWN</span>
+      <button id="theme-toggle" class="icon-button" type="button" aria-label="Toggle color theme">◐</button>
+    </div>
+  </header>
+
+  <div class="workspace">
+    <aside class="sidebar" aria-label="Explorer sections">
+      <nav>
+        <a href="#configuration" class="nav-link active"><span>01</span> Configuration</a>
+        <a href="#oauth" class="nav-link"><span>02</span> OAuth</a>
+        <a href="#token" class="nav-link"><span>03</span> Token</a>
+        <a href="#permissions" class="nav-link"><span>04</span> Permissions</a>
+        <a href="#api-explorer" class="nav-link"><span>05</span> API Explorer</a>
+        <a href="#full-test" class="nav-link"><span>06</span> Full Test</a>
+        <a href="#diagnostics" class="nav-link"><span>07</span> Diagnostics</a>
+      </nav>
+      <div class="sidebar-note">
+        <strong>TESTING ONLY</strong>
+        <p>No scraping, automation, DMs, spam, or permanent credential storage.</p>
+      </div>
+      <a class="doc-link" href="https://developers.facebook.com/docs/threads" target="_blank" rel="noopener noreferrer">Meta Threads API Documentation ↗</a>
+    </aside>
+
+    <main class="main-panel">
+      <section id="configuration" class="panel-section">
+        <div class="section-heading"><div><span class="eyebrow">STEP 01</span><h2>App Configuration</h2></div><span id="config-badge" class="badge unknown">UNKNOWN</span></div>
+        <div class="notice">App Secret is accepted only as a server-side Cloudflare secret. It is never requested or rendered here.</div>
+        <div class="form-grid">
+          <label>Threads App ID<input id="app-id" inputmode="numeric" autocomplete="off" value="1076777211404791" placeholder="Your numeric Threads App ID"></label>
+          <label>Redirect URI<input id="redirect-uri" type="url" autocomplete="off" placeholder="https://your-domain.pages.dev/oauth/callback"></label>
+          <label>Scope<input id="scope" value="threads_basic" autocomplete="off"></label>
+          <label>State<input id="state" class="mono" readonly aria-readonly="true"></label>
+        </div>
+        <div class="inline-status"><span>Server-side App Secret</span><span id="secret-status" class="badge unknown">CHECKING</span></div>
+      </section>
+
+      <section id="oauth" class="panel-section">
+        <div class="section-heading"><div><span class="eyebrow">STEP 02</span><h2>OAuth Explorer</h2></div><span id="auth-badge" class="badge unknown">UNKNOWN</span></div>
+        <p class="section-copy">Uses the current official authorization-code flow. The callback validates state and performs token exchange server-side.</p>
+        <div class="button-row"><button id="start-oauth" class="button primary" type="button">START OAUTH TEST</button><button id="open-oauth" class="button" type="button" disabled>OPEN OAUTH ↗</button></div>
+        <label class="wide-label">OAuth URL<div class="copy-field"><input id="oauth-url" class="mono" readonly placeholder="Generate an OAuth URL first"><button data-copy-target="oauth-url" type="button">COPY</button></div></label>
+        <div class="result-strip"><div><span>AUTHORIZATION</span><strong id="authorization-result">NOT RUN</strong></div><div><span>AUTHORIZATION CODE</span><strong id="code-result">NOT RECEIVED</strong></div></div>
+      </section>
+
+      <section id="token" class="panel-section">
+        <div class="section-heading"><div><span class="eyebrow">STEP 03</span><h2>Access Token Test</h2></div><span id="token-badge" class="badge unknown">UNKNOWN</span></div>
+        <div class="token-display"><span>Access Token</span><code id="masked-token">Not available</code><small>Encrypted in a short-lived HttpOnly cookie; never stored permanently or returned in full.</small></div>
+        <div class="button-row"><button id="refresh-session" class="button" type="button">REFRESH STATUS</button><button id="clear-session" class="button danger" type="button">CLEAR TOKEN</button></div>
+      </section>
+
+      <section id="permissions" class="panel-section">
+        <div class="section-heading"><div><span class="eyebrow">STEP 04</span><h2>Permission / Scope Test</h2></div><span id="permission-badge" class="badge unknown">UNKNOWN</span></div>
+        <p class="section-copy">OAuth success alone does not prove a permission is granted. <code>threads_basic</code> is marked granted only after a successful official profile endpoint probe.</p>
+        <div id="scope-list" class="scope-list"><div class="scope-row"><code>threads_basic</code><span class="badge unknown">REQUESTED</span></div></div>
+        <button id="probe-permissions" class="button primary" type="button">TEST PERMISSIONS</button>
+      </section>
+
+      <section id="api-explorer" class="panel-section">
+        <div class="section-heading"><div><span class="eyebrow">STEP 05</span><h2>API Request Explorer</h2></div><span id="request-badge" class="badge unknown">UNKNOWN</span></div>
+        <label class="wide-label">Select Threads API Endpoint<select id="preset"><option value="">Manual request</option></select></label>
+        <div id="preset-meta" class="preset-meta muted">Choose a verified preset or enter a manual request.</div>
+        <div class="request-line"><label>Method<select id="method"><option>GET</option><option>POST</option><option>DELETE</option></select></label><label>Endpoint<input id="endpoint" class="mono" value="https://graph.threads.com/v1.0/me"></label></div>
+        <div class="builder-block"><div class="builder-heading"><h3>Query Parameters</h3><button id="add-param" class="text-button" type="button">+ ADD ROW</button></div><div id="params-list" class="kv-list"></div></div>
+        <div class="builder-block"><div class="builder-heading"><h3>Headers</h3><button id="add-header" class="text-button" type="button">+ ADD ROW</button></div><div id="headers-list" class="kv-list"></div></div>
+        <label id="body-wrap" class="wide-label hidden">Request Body (JSON)<textarea id="request-body" class="mono" rows="5" placeholder="{}"></textarea></label>
+        <div class="auth-summary"><span>Authorization</span><strong>OAuth Token — attached server-side</strong></div>
+        <div class="button-row"><button id="send-request" class="button primary" type="button">SEND REQUEST</button><button id="copy-request" class="button" type="button">COPY REQUEST URL</button></div>
+      </section>
+
+      <section id="full-test" class="panel-section">
+        <div class="section-heading"><div><span class="eyebrow">STEP 06</span><h2>Readiness Test</h2></div><span id="readiness-badge" class="badge unknown">UNKNOWN</span></div>
+        <button id="run-full-test" class="button primary wide" type="button">RUN FULL TEST</button>
+        <div id="checklist" class="checklist"></div>
+        <div class="review-box"><div><h3>Meta App Status</h3><span id="api-test-status" class="badge unknown">API TEST UNKNOWN</span></div><p>API test results do not mean the Meta App is automatically approved or published.</p><div class="review-line"><span>REVIEW STATUS</span><strong>UNKNOWN</strong></div></div>
+      </section>
+
+      <section id="diagnostics" class="panel-section">
+        <div class="section-heading"><div><span class="eyebrow">STEP 07</span><h2>Error Diagnostics</h2></div><span id="diagnostic-badge" class="badge unknown">NO ERROR</span></div>
+        <dl id="diagnostic-list" class="diagnostic-list"><dt>Error Category</dt><dd>—</dd><dt>HTTP Status</dt><dd>—</dd><dt>Meta Error Code</dt><dd>—</dd><dt>Meta Error Message</dt><dd>—</dd><dt>Likely Cause</dt><dd>—</dd><dt>Recommended Action</dt><dd>—</dd></dl>
+      </section>
+
+      <section class="panel-section compact">
+        <div class="section-heading"><div><span class="eyebrow">OPTIONAL</span><h2>Graph API Explorer</h2></div><span class="badge warn">OPTIONAL</span></div>
+        <p>Graph API Explorer is not required for this tester. This tool performs API requests directly against the configured Threads API endpoints.</p>
+        <p class="muted">The official profile documentation notes that tokens can be generated while testing through Graph API Explorer. Direct Threads API testing is recommended here.</p>
+      </section>
+    </main>
+
+    <aside class="response-panel" aria-label="Response and logs">
+      <div class="response-header"><div><span class="eyebrow">LIVE OUTPUT</span><h2>Response / Logs</h2></div><button id="copy-response" class="button small" type="button">COPY JSON</button></div>
+      <div class="response-stats"><div><span>HTTP STATUS</span><strong id="http-status">—</strong></div><div><span>DURATION</span><strong id="duration">—</strong></div></div>
+      <div class="tabs" role="tablist"><button class="tab active" data-tab="json" type="button">JSON VIEWER</button><button class="tab" data-tab="raw" type="button">RAW RESPONSE</button><button class="tab" data-tab="headers" type="button">HEADERS</button></div>
+      <pre id="response-json" class="response-view active">{
+  "status": "ready",
+  "message": "Configure OAuth to begin."
+}</pre>
+      <pre id="response-raw" class="response-view"></pre>
+      <pre id="response-headers" class="response-view"></pre>
+      <div class="event-log"><div class="builder-heading"><h3>Session Log</h3><button id="clear-log" class="text-button" type="button">CLEAR</button></div><ol id="log-list"><li><time>READY</time> Explorer initialized.</li></ol></div>
+    </aside>
+  </div>
+  <div id="toast" role="status" aria-live="polite"></div>
+  <script src="/static/app.js" defer></script>
+</body>
+</html>
