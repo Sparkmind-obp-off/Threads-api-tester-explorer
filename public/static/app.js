@@ -1,6 +1,11 @@
 const $ = (id) => document.getElementById(id)
-const state = { config: null, session: null, permission: null, lastResult: null, presets: [] }
-const statusClass = (value) => String(value || 'unknown').toLowerCase().includes('pass') || value === 'GRANTED' || value === 'RECEIVED' ? 'pass' : String(value || '').toLowerCase().includes('fail') || value === 'FAILED' ? 'fail' : value === 'REQUESTED' || value === 'WARN' ? 'warn' : 'unknown'
+const state = { health: null, config: null, session: null, permission: null, lastResult: null, presets: [] }
+const statusClass = (value) => {
+  const normalized = String(value || 'unknown').toUpperCase()
+  if (normalized.includes('PASS') || normalized.includes('READY') && !normalized.includes('NOT READY') || normalized === 'GRANTED' || normalized === 'RECEIVED' || normalized === 'CONFIGURED') return 'pass'
+  if (normalized.includes('FAIL') || normalized.includes('ERROR') || normalized.includes('NOT READY') || normalized === 'FAILED' || normalized === 'ACTION REQUIRED') return 'fail'
+  return normalized === 'REQUESTED' || normalized === 'WARN' ? 'warn' : 'unknown'
+}
 
 function setBadge(id, text) { const el = $(id); el.textContent = text; el.className = `badge ${statusClass(text)}` }
 function toast(message) { const el = $('toast'); el.textContent = message; el.classList.add('show'); setTimeout(() => el.classList.remove('show'), 1800) }
@@ -14,11 +19,49 @@ function updateResponse(result) { state.lastResult = result; const response = re
 function diagnostics(info) { const d = info || {}; const values = [d.category, d.httpStatus, d.metaCode, d.metaMessage, d.likelyCause, d.recommendedAction].map(v => v ?? '—'); [...$('diagnostic-list').querySelectorAll('dd')].forEach((el, i) => { el.textContent = values[i] }); setBadge('diagnostic-badge', info ? 'FAIL' : 'NO ERROR') }
 function renderScopes(items) { $('scope-list').innerHTML = ''; (items.length ? items : [{ scope:'threads_basic', status:'REQUESTED', evidence:'Requested scope has not been tested.' }]).forEach(item => { const row = document.createElement('div'); row.className = 'scope-row'; row.innerHTML = `<div><code>${escapeHtml(item.scope)}</code><small>${escapeHtml(item.evidence || 'Requested in OAuth configuration.')}</small></div><span class="badge ${statusClass(item.status)}">${escapeHtml(item.status)}</span>`; $('scope-list').append(row) }) }
 
-async function loadConfig() {
-  try { state.config = await api('/api/config'); setBadge('server-status', 'SERVER PASS'); setBadge('secret-status', state.config.appSecretConfigured ? 'CONFIGURED' : 'ACTION REQUIRED'); validateConfig() }
-  catch (error) { setBadge('server-status', 'SERVER FAIL'); log(error.message) }
+function showReadinessDiagnostics(serverHealth, backendConfig, oauthBackend) {
+  setBadge('server-health-result', serverHealth)
+  setBadge('backend-config-result', backendConfig)
+  setBadge('oauth-backend-result', oauthBackend)
 }
-function validateConfig() { const ok = /^\d+$/.test($('app-id').value.trim()) && /^https?:\/\//.test($('redirect-uri').value.trim()) && $('scope').value.trim() && state.config?.appSecretConfigured; setBadge('config-badge', ok ? 'PASS' : 'FAIL'); return Boolean(ok) }
+
+async function loadHealth() {
+  try {
+    state.health = await api('/api/health')
+    if (state.health.ok !== true || state.health.service !== 'threads-api-test-explorer') throw new Error('Unexpected health response.')
+    setBadge('server-status', 'SERVER READY')
+    setBadge('server-health-result', 'PASS')
+    log('Server health check passed: HTTP 200.')
+  } catch (error) {
+    const detail = error.status ? `HTTP ${error.status}: ${error.message}` : `NETWORK_ERROR: ${error.message}`
+    setBadge('server-status', 'SERVER ERROR')
+    setBadge('server-health-result', 'FAIL')
+    diagnostics({ category:'SERVER_HEALTH_FAILED', httpStatus:error.status || 'NETWORK_ERROR', metaCode:'—', metaMessage:detail, likelyCause:'The deployed backend health endpoint is unreachable or returned an invalid response.', recommendedAction:'Verify /api/health on the deployed Cloudflare Pages URL.' })
+    log(`Server health check failed: ${detail}`)
+  }
+}
+
+async function loadConfig() {
+  try {
+    state.config = await api('/api/config/status')
+    const missing = [
+      ['THREADS_APP_ID', state.config.appIdConfigured],
+      ['THREADS_APP_SECRET', state.config.appSecretConfigured],
+      ['THREADS_REDIRECT_URI', state.config.redirectUriConfigured],
+    ].filter(([, configured]) => !configured).map(([name]) => name)
+    setBadge('secret-status', state.config.appSecretConfigured ? 'CONFIGURED' : 'ACTION REQUIRED')
+    showReadinessDiagnostics(state.health?.ok ? 'PASS' : 'FAIL', missing.length ? 'FAIL' : 'PASS', state.config.oauthReady ? 'READY' : 'NOT READY')
+    if (missing.length) log(`MISSING_ENVIRONMENT_VARIABLE: ${missing.join(', ')}`)
+    validateConfig()
+  } catch (error) {
+    setBadge('secret-status', 'ACTION REQUIRED')
+    setBadge('backend-config-result', 'FAIL')
+    setBadge('oauth-backend-result', 'NOT READY')
+    const detail = error.status ? `HTTP ${error.status}: ${error.message}` : `NETWORK_ERROR: ${error.message}`
+    log(`Configuration status failed: ${detail}`)
+  }
+}
+function validateConfig() { const ok = /^\d+$/.test($('app-id').value.trim()) && /^https?:\/\//.test($('redirect-uri').value.trim()) && $('scope').value.trim() && state.config?.oauthReady; setBadge('config-badge', ok ? 'PASS' : 'FAIL'); return Boolean(ok) }
 
 async function loadSession() {
   try { state.session = await api('/api/session'); if (state.session.authenticated) { setBadge('auth-badge','PASS'); setBadge('token-badge','PASS'); $('authorization-result').textContent='PASS'; $('code-result').textContent='RECEIVED'; $('masked-token').textContent=state.session.maskedToken; renderScopes(state.session.requestedScopes.map(scope => ({scope,status:'REQUESTED'}))); log('Active ephemeral OAuth session detected.') } else { setBadge('auth-badge','UNKNOWN'); setBadge('token-badge','UNKNOWN'); $('masked-token').textContent='Not available' } }
@@ -73,5 +116,5 @@ $('theme-toggle').onclick=()=>{const root=document.documentElement;root.dataset.
 
 function inspectCallback(){const query=new URLSearchParams(location.search);const oauth=query.get('oauth');if(!oauth)return;if(oauth==='pass'){setBadge('auth-badge','PASS');setBadge('token-badge','PASS');$('authorization-result').textContent='PASS';$('code-result').textContent='RECEIVED';log('OAuth callback succeeded; authorization code was exchanged server-side.')}else{setBadge('auth-badge','FAIL');$('authorization-result').textContent='FAIL';$('code-result').textContent='NOT RECEIVED';const reason=query.get('reason')||'Authorization failed.';diagnostics({category:'AUTHORIZATION_FAILED',httpStatus:'—',metaCode:'—',metaMessage:reason,likelyCause:'Authorization or server-side token exchange was rejected.',recommendedAction:'Verify App ID, exact redirect URI, app secret, and OAuth configuration in Meta App Dashboard.'});log(`OAuth failed: ${reason}`)}history.replaceState({},'',location.pathname)}
 
-async function init(){document.documentElement.dataset.theme=localStorage.getItem('threads-theme')||'dark';$('redirect-uri').value=`${location.origin}/oauth/callback`;$('state').value=randomState();addRow('params-list','fields','id,username,name,threads_profile_picture_url,threads_biography,is_verified');addRow('headers-list','Accept','application/json');renderChecklist();inspectCallback();await Promise.all([loadConfig(),loadSession(),loadPresets()])}
+async function init(){document.documentElement.dataset.theme=localStorage.getItem('threads-theme')||'dark';$('redirect-uri').value=`${location.origin}/oauth/callback`;$('state').value=randomState();addRow('params-list','fields','id,username,name,threads_profile_picture_url,threads_biography,is_verified');addRow('headers-list','Accept','application/json');renderChecklist();inspectCallback();await loadHealth();await Promise.all([loadConfig(),loadSession(),loadPresets()])}
 init()

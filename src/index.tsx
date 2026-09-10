@@ -5,7 +5,9 @@ import { serveStatic } from 'hono/cloudflare-workers'
 import indexHtml from '../public/index.html?raw'
 
 type Bindings = {
+  THREADS_APP_ID?: string
   THREADS_APP_SECRET?: string
+  THREADS_REDIRECT_URI?: string
   OAUTH_SESSION_KEY?: string
 }
 
@@ -191,15 +193,24 @@ function diagnose(status: number, payload: any) {
   return { category, httpStatus: status, metaCode: code, metaMessage: message, likelyCause, recommendedAction }
 }
 
-app.get('/api/health', (c) => c.json({ ok: true, service: 'Threads API Test Explorer', apiHost: GRAPH_HOST }))
-
-app.get('/api/config', (c) => c.json({
+app.get('/api/health', (c) => c.json({
   ok: true,
-  appSecretConfigured: Boolean(c.env.THREADS_APP_SECRET),
-  sessionEncryptionConfigured: Boolean(sessionSecret(c.env)),
-  officialAuthorizationEndpoint: `https://${AUTH_HOST}/oauth/authorize`,
-  officialGraphHost: `https://${GRAPH_HOST}`,
+  service: 'threads-api-test-explorer',
+  environment: 'production',
 }))
+
+app.get('/api/config/status', (c) => {
+  const appIdConfigured = Boolean(c.env.THREADS_APP_ID?.trim())
+  const appSecretConfigured = Boolean(c.env.THREADS_APP_SECRET?.trim())
+  const redirectUriConfigured = Boolean(c.env.THREADS_REDIRECT_URI?.trim())
+
+  return c.json({
+    appIdConfigured,
+    appSecretConfigured,
+    redirectUriConfigured,
+    oauthReady: appIdConfigured && appSecretConfigured && redirectUriConfigured,
+  })
+})
 
 app.post('/api/oauth/prepare', async (c) => {
   const key = sessionSecret(c.env)
