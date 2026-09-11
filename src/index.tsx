@@ -33,7 +33,7 @@ type RateBucket = {
 
 const app = new Hono<{ Bindings: Bindings }>()
 const AUTH_HOST = 'threads.com'
-const GRAPH_HOST = 'graph.threads.com'
+const GRAPH_HOST = 'graph.threads.net'
 const API_VERSION = 'v1.0'
 const COOKIE_DRAFT = 'threads_oauth_draft'
 const COOKIE_SESSION = 'threads_test_session'
